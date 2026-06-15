@@ -612,6 +612,74 @@ label {
   text-align: center;
   font-size: 13px;
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mother-status {
+  border: 1px solid rgba(137, 128, 120, 0.24);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 249, 240, 0.72);
+}
+
+.mother-role {
+  border: 1px solid rgba(137, 128, 120, 0.24);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 249, 240, 0.66);
+}
+
+.mother-role.principal {
+  color: #806f54;
+  border-color: rgba(128, 111, 84, 0.28);
+  background: rgba(200, 189, 176, 0.16);
+}
+
+.mother-role.successor {
+  color: #6f675f;
+  border-style: dashed;
+  border-color: rgba(111, 103, 95, 0.3);
+  background: rgba(255, 249, 240, 0.56);
+}
+
+.mother-role.concubine {
+  color: #6f6455;
+  border-color: rgba(111, 100, 85, 0.22);
+  background: rgba(119, 107, 88, 0.08);
+}
+
+.mother-status.alive {
+  color: #536b48;
+  border-color: rgba(83, 107, 72, 0.24);
+  background: rgba(83, 107, 72, 0.08);
+}
+
+.mother-status.deceased {
+  color: var(--danger);
+  border-color: rgba(155, 61, 53, 0.22);
+  background: rgba(155, 61, 53, 0.07);
+}
+
+.mother-status.divorced {
+  color: #7f5d55;
+  border-color: rgba(127, 93, 85, 0.22);
+  background: rgba(127, 93, 85, 0.07);
+}
+
+.mother-node.adoptive-mother-node {
+  border-style: dashed;
+  border-color: rgba(111, 103, 95, 0.5);
+  background:
+    linear-gradient(180deg, rgba(255, 249, 240, 0.82), rgba(232, 224, 214, 0.66));
+  color: var(--deep-2);
+  min-width: 88px;
 }
 
 .mother-node::after {
@@ -735,6 +803,51 @@ label {
   margin-bottom: 4px;
 }
 
+.out-adopted-mark {
+  border: 1px dashed rgba(137, 128, 120, 0.42);
+  border-radius: 8px;
+  background: rgba(255, 249, 240, 0.74);
+  color: var(--muted);
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  position: relative;
+}
+
+.mother-children > .out-adopted-mark::before {
+  content: "";
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  width: 1px;
+  height: 22px;
+  border-left: 1px dashed rgba(137, 128, 120, 0.62);
+}
+
+.out-adopted-mark b {
+  color: var(--deep-2);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.out-adopted-descendants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(137, 128, 120, 0.28);
+}
+
+.out-adopted-descendants span {
+  border: 1px dashed rgba(137, 128, 120, 0.42);
+  border-radius: 6px;
+  background: rgba(255, 249, 240, 0.68);
+  color: var(--deep-2);
+  padding: 3px 7px;
+  font-size: 12px;
+}
+
 .member-card {
   border: 1px solid #d1c7bb;
   border-radius: 8px;
@@ -743,43 +856,6 @@ label {
   width: 268px;
   position: relative;
   box-shadow: 0 10px 22px rgba(60, 55, 49, 0.08);
-}
-
-body:not(.view-mode) .member-card[draggable="true"] {
-  cursor: grab;
-}
-
-body:not(.view-mode) .member-card[draggable="true"]:active {
-  cursor: grabbing;
-}
-
-.member-card.dragging {
-  opacity: 0.46;
-}
-
-.member-card.drop-before,
-.member-card.drop-after {
-  outline: 1px dashed rgba(111, 103, 95, 0.48);
-  outline-offset: 4px;
-}
-
-.member-card.drop-before::before,
-.member-card.drop-after::before {
-  content: "";
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  width: 3px;
-  border-radius: 999px;
-  background: rgba(111, 103, 95, 0.52);
-}
-
-.member-card.drop-before::before {
-  left: -12px;
-}
-
-.member-card.drop-after::before {
-  right: -12px;
 }
 
 .member-card.collapsed {
@@ -797,6 +873,25 @@ body:not(.view-mode) .member-card[draggable="true"]:active {
 .member-name {
   font-size: 19px;
   font-weight: 600;
+}
+
+.order-input {
+  height: 28px;
+  border-radius: 999px;
+  padding: 3px 6px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.order-input::-webkit-outer-spin-button,
+.order-input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.order-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 .branch-toggle {

@@ -74,7 +74,7 @@ function normalizeState(data) {
   const marriages = Array.isArray(data.marriages)
     ? data.marriages
         .filter((item) => item.id !== "r4" && !removedIds.has(item.husbandId) && !removedIds.has(item.wifeId))
-        .map((item) => ({ residence: "patrilocal", ...item }))
+        .map((item) => ({ residence: "patrilocal", marriageStatus: "current", ...item }))
     : [];
 
   return { members, marriages };
@@ -170,7 +170,14 @@ function memberIndex(id) {
 }
 
 function roleText(role) {
+  if (role === "successor") return "继妻";
   return role === "concubine" ? "妾" : "正妻";
+}
+
+function marriageStatusText(status) {
+  if (status === "deceased") return "已故";
+  if (status === "divorced") return "和离";
+  return "";
 }
 
 function residenceText(residence) {
@@ -183,6 +190,15 @@ function marriageOfParents(member) {
 }
 
 function lineageParentId(member) {
+  if (member.adoptiveParentId) return member.adoptiveParentId;
+  const marriage = marriageOfParents(member);
+  if (marriage?.residence === "matrilocal") return member.motherId;
+  if (member.fatherId) return member.fatherId;
+  if (member.motherId) return member.motherId;
+  return "";
+}
+
+function birthLineageParentId(member) {
   const marriage = marriageOfParents(member);
   if (marriage?.residence === "matrilocal") return member.motherId;
   if (member.fatherId) return member.fatherId;
@@ -220,7 +236,7 @@ function legitimacyFor(member) {
   const marriage = marriageOfParents(member);
   if (!marriage) return "嫡庶未明";
   if (marriage.residence === "matrilocal") return "入赘支";
-  return marriage.role === "principal" ? "嫡出" : "庶出";
+  return marriage.role === "principal" || marriage.role === "successor" ? "嫡出" : "庶出";
 }
 
 function spouseLines(memberId) {
@@ -234,7 +250,9 @@ function spouseLines(memberId) {
         ? (isHusband ? "入赘于" : "入赘夫")
         : (isHusband ? roleText(item.role) : "夫婿");
       const details = [];
+      const status = marriageStatusText(item.marriageStatus);
       if (residence === "matrilocal" || !isHusband) details.push(residenceText(residence));
+      if (status) details.push(status);
       if (item.notes) details.push(item.notes);
       return `${role}：${otherName}${details.length ? `（${details.join("，")}）` : ""}`;
     });
@@ -244,8 +262,7 @@ function childMembers(memberId) {
   return state.members
     .filter((member) => lineageParentId(member) === memberId)
     .sort((a, b) => {
-      const legitimacyOrder = legitimacyFor(a).localeCompare(legitimacyFor(b), "zh-Hans-CN");
-      return a.generation - b.generation || legitimacyOrder || memberIndex(a.id) - memberIndex(b.id);
+      return a.generation - b.generation || memberIndex(a.id) - memberIndex(b.id);
     });
 }
 
@@ -338,6 +355,7 @@ function setMode(nextMode) {
   mode = nextMode;
   localStorage.setItem(MODE_KEY, mode);
   applyMode();
+  renderTree();
 }
 
 function applyFont() {
@@ -409,9 +427,6 @@ function countGraphMembers(roots, visibleIds) {
     if (!member || seen.has(member.id) || !visibleIds.has(member.id) || isSpouseOnly(member)) return;
     seen.add(member.id);
     childMembers(member.id).forEach(visit);
-    adoptiveChildren(member.id).forEach((child) => {
-      if (visibleIds.has(child.id)) seen.add(`${member.id}:adoptive:${child.id}`);
-    });
   };
   roots.forEach(visit);
   return seen.size;
@@ -419,79 +434,62 @@ function countGraphMembers(roots, visibleIds) {
 
 function renderNode(member, visibleIds) {
   const children = childMembers(member.id).filter((child) => visibleIds.has(child.id));
-  const adoptive = adoptiveChildren(member.id).filter((child) => visibleIds.has(child.id));
+  const outAdopted = outAdoptedChildren(member.id).filter((child) => visibleIds.has(child.id));
   const isCollapsed = collapsed.has(member.id);
-  const canCollapse = children.length > 0 || adoptive.length > 0;
-  const descendants = hiddenDescendantCount(member.id) + adoptive.length;
+  const canCollapse = children.length > 0 || outAdopted.length > 0;
+  const descendants = hiddenDescendantCount(member.id) + outAdopted.length;
   const card = renderCard(member, { canCollapse, isCollapsed, descendants });
   const nodeClasses = ["lineage-node"];
   if (canCollapse) nodeClasses.push("has-children", "has-mother-groups");
-  if (adoptive.length && !children.length) nodeClasses.push("has-adoptive-only");
+  if (outAdopted.length && !children.length) nodeClasses.push("has-adoptive-only");
   const childTree = !isCollapsed
-    ? [
-        children.length ? renderMotherGroups(member, children, visibleIds) : "",
-        adoptive.length ? renderAdoptiveGroup(member, adoptive) : ""
-      ].join("")
+    ? (children.length || outAdopted.length ? renderMotherGroups(member, children, visibleIds, outAdopted) : "")
     : "";
   return `<div class="${nodeClasses.join(" ")}">${card}${childTree}</div>`;
 }
 
-function adoptiveChildren(memberId) {
+function outAdoptedChildren(memberId) {
   return state.members
-    .filter((member) => member.adoptiveParentId === memberId)
+    .filter((member) => member.adoptiveParentId && birthLineageParentId(member) === memberId && member.adoptiveParentId !== memberId)
     .sort((a, b) => a.generation - b.generation || memberIndex(a.id) - memberIndex(b.id));
 }
 
-function renderAdoptiveGroup(parent, children) {
+function renderOutAdoptedMark(parent, child) {
+  const type = adoptionTypeText(child.adoptionType) || "嗣子";
+  const target = memberName(child.adoptiveParentId);
+  const note = child.adoptionNote ? ` · ${child.adoptionNote}` : "";
+  const children = childMembers(child.id);
   return `
-    <div class="adoptive-group">
-      <div class="adoptive-node">承嗣</div>
-      <div class="adoptive-children">
-        ${children.map((child) => renderAdoptiveCard(parent, child)).join("")}
+    <div class="out-adopted-mark">
+      <div>
+        <b>${escapeHtml(child.name)}</b>
+        <span>${escapeHtml(type)}，承嗣于 ${escapeHtml(target)}${escapeHtml(note)}</span>
       </div>
+      ${
+        children.length
+          ? `<div class="out-adopted-descendants">${children.map((item) => `<span>${escapeHtml(item.name)}</span>`).join("")}</div>`
+          : ""
+      }
     </div>
   `;
 }
 
-function renderAdoptiveCard(parent, child) {
-  const type = adoptionTypeText(child.adoptionType) || "嗣子";
-  const details = [
-    child.fatherId ? `本生父：${memberName(child.fatherId)}` : "",
-    child.motherId ? `本生母：${memberName(child.motherId)}` : "",
-    child.adoptionNote
-  ].filter(Boolean);
-  return `
-    <article class="member-card adoptive-card">
-      <div class="member-top">
-        <div>
-          <div class="adoptive-kicker">${escapeHtml(type)} · 承嗣于 ${escapeHtml(parent.name)}</div>
-          <div class="member-name">${escapeHtml(child.name)}</div>
-        </div>
-      </div>
-      <div class="tags">
-        <span class="tag adoptive-tag">${escapeHtml(type)}</span>
-        <span class="${tagClass(statusText(child))}">${escapeHtml(statusText(child))}</span>
-      </div>
-      <div class="relations">${details.map((row) => `<div>${escapeHtml(row)}</div>`).join("")}</div>
-      <div class="card-actions">
-        <button class="small-button ghost" type="button" data-action="edit" data-id="${child.id}">编辑</button>
-      </div>
-    </article>
-  `;
-}
-
-function renderMotherGroups(parent, children, visibleIds) {
-  const groups = motherGroupsFor(parent, children);
+function renderMotherGroups(parent, children, visibleIds, outAdopted = []) {
+  const groups = motherGroupsFor(parent, children, outAdopted);
   return `
     <div class="mother-groups">
       ${groups
         .map((group) => `
           <div class="mother-group ${collapsed.has(group.id) ? "collapsed" : ""}">
-            <div class="mother-node">${escapeHtml(group.label)}</div>
+            <div class="mother-node ${group.nodeClass}">
+              <span>${escapeHtml(group.label)}</span>
+              ${group.role ? `<b class="${group.roleClass}">${escapeHtml(group.role)}</b>` : ""}
+              ${group.status ? `<b class="${group.statusClass}">${escapeHtml(group.status)}</b>` : ""}
+            </div>
             ${
               collapsed.has(group.id)
-                ? `<div class="branch-note">此母支已收起，共 ${group.children.length} 位子嗣</div>`
-                : `<div class="mother-children">${group.children.map((child) => renderNode(child, visibleIds)).join("")}</div>`
+                ? `<div class="branch-note">此母支已收起，共 ${group.entries.length} 位</div>`
+                : `<div class="mother-children">${group.entries.map((entry) => entry.outAdopted ? renderOutAdoptedMark(parent, entry.member) : renderNode(entry.member, visibleIds)).join("")}</div>`
             }
           </div>
         `)
@@ -500,25 +498,67 @@ function renderMotherGroups(parent, children, visibleIds) {
   `;
 }
 
-function motherGroupsFor(parent, children) {
+function motherGroupsFor(parent, children, outAdopted = []) {
   const groups = new Map();
-  children.forEach((child) => {
-    const key = child.motherId || `unknown:${child.motherGroup || ""}`;
+  const addChild = (child, outAdoptedChild = false) => {
+    const isAdoptiveBranch = child.adoptiveParentId === parent.id;
+    const key = outAdoptedChild
+      ? (child.motherId || `unknown:${child.motherGroup || ""}`)
+      : (isAdoptiveBranch ? "adoptive" : (child.motherId || `unknown:${child.motherGroup || ""}`));
     if (!groups.has(key)) {
       groups.set(key, {
         id: `${parent.id}:mother:${key}`,
-        label: motherGroupLabel(child),
-        children: []
+        label: !outAdoptedChild && isAdoptiveBranch ? "承嗣" : motherGroupLabel(child),
+        role: !outAdoptedChild && isAdoptiveBranch ? "" : motherGroupRole(child),
+        roleClass: !outAdoptedChild && isAdoptiveBranch ? "" : motherGroupRoleClass(child),
+        status: !outAdoptedChild && isAdoptiveBranch ? "" : motherGroupStatus(child),
+        statusClass: !outAdoptedChild && isAdoptiveBranch ? "" : motherGroupStatusClass(child),
+        nodeClass: !outAdoptedChild && isAdoptiveBranch ? "adoptive-mother-node" : "",
+        entries: []
       });
     }
-    groups.get(key).children.push(child);
-  });
+    groups.get(key).entries.push({ member: child, outAdopted: outAdoptedChild });
+  };
+  children.forEach((child) => addChild(child, false));
+  outAdopted.forEach((child) => addChild(child, true));
   return [...groups.values()];
 }
 
 function motherGroupLabel(child) {
   if (child.motherId) return memberName(child.motherId);
   return child.motherGroup ? `母未记 · ${child.motherGroup}` : "母未记";
+}
+
+function motherGroupStatus(child) {
+  if (!child.motherId) return "";
+  const marriage = marriageOfParents(child);
+  if (marriage?.marriageStatus === "divorced") return "和离";
+  const mother = state.members.find((member) => member.id === child.motherId);
+  if (mother?.lifeStatus === "dead" || marriage?.marriageStatus === "deceased") return "已故";
+  return "在世";
+}
+
+function motherGroupStatusClass(child) {
+  const status = motherGroupStatus(child);
+  if (status === "和离") return "mother-status divorced";
+  if (status === "已故") return "mother-status deceased";
+  if (status === "在世") return "mother-status alive";
+  return "mother-status";
+}
+
+function motherGroupRole(child) {
+  if (!child.motherId) return "";
+  const marriage = marriageOfParents(child);
+  if (!marriage) return "";
+  return roleText(marriage.role);
+}
+
+function motherGroupRoleClass(child) {
+  const role = motherGroupRole(child);
+  if (role === "妾") return "mother-role concubine";
+  if (role === "继妻") return "mother-role successor";
+  if (role === "正妻") return "mother-role principal";
+  return "mother-role";
 }
 
 function renderRootNode(member, visibleIds) {
@@ -545,7 +585,7 @@ function renderCard(member, options = {}) {
   ].filter(Boolean);
 
   return `
-    <article class="member-card ${isCollapsed ? "collapsed" : ""}">
+    <article class="member-card ${isCollapsed ? "collapsed" : ""}" data-member-id="${member.id}">
       <div class="member-top">
         <div class="member-name">${escapeHtml(member.name)}</div>
         ${
@@ -575,6 +615,15 @@ function renderCard(member, options = {}) {
       </div>
     </article>
   `;
+}
+
+function siblingOrderInfo(member) {
+  const siblings = siblingGroup(member);
+  const index = siblings.findIndex((item) => item.id === member.id);
+  return {
+    index: index >= 0 ? index + 1 : 1,
+    total: Math.max(1, siblings.length)
+  };
 }
 
 function memberDetailRows(member) {
@@ -657,6 +706,7 @@ function resetForm() {
   $("#editingId").value = "";
   $("#memberDialogTitle").textContent = "新增族人";
   $("#generationInput").value = 1;
+  $("#siblingOrderInput").value = 1;
   $("#birthStatusInput").value = "";
   $("#motherGroupInput").value = "";
   $("#adoptiveParentInput").value = "";
@@ -716,6 +766,7 @@ function editMember(id) {
   $("#nameInput").value = member.name;
   $("#genderInput").value = member.gender;
   $("#generationInput").value = member.generation || 1;
+  $("#siblingOrderInput").value = siblingOrderInfo(member).index;
   $("#styleInput").value = member.styleName || "";
   $("#fatherInput").value = member.fatherId || "";
   $("#motherInput").value = member.motherId || "";
@@ -790,6 +841,7 @@ function prepareSpouse(memberId) {
   $("#newHusbandInput").value = "";
   $("#newWifeInput").value = "";
   $("#spouseRoleInput").value = "principal";
+  $("#marriageStatusInput").value = "current";
   $("#residenceInput").value = "patrilocal";
   $("#marriageNotesInput").value = "";
   els.dialog.showModal();
@@ -839,6 +891,7 @@ els.memberForm.addEventListener("submit", (event) => {
   } else {
     state.members.push(member);
   }
+  setMemberSiblingOrder(member.id, Number($("#siblingOrderInput").value), false);
   resetForm();
   els.memberDialog.close();
   render();
@@ -879,6 +932,7 @@ els.marriageForm.addEventListener("submit", (event) => {
     wifeId,
     role: $("#spouseRoleInput").value,
     residence: $("#residenceInput").value,
+    marriageStatus: $("#marriageStatusInput").value,
     notes: $("#marriageNotesInput").value.trim()
   };
 
@@ -912,6 +966,34 @@ els.treeView.addEventListener("click", (event) => {
   if (action === "spouse") prepareSpouse(id);
 });
 
+function setMemberSiblingOrder(memberId, nextOrder, shouldRender = true) {
+  const member = state.members.find((item) => item.id === memberId);
+  if (!member) return;
+  const siblings = siblingGroup(member);
+  if (siblings.length <= 1) return;
+  const currentIndex = siblings.findIndex((item) => item.id === memberId);
+  const targetIndex = Math.min(Math.max(1, nextOrder || 1), siblings.length) - 1;
+  if (currentIndex === targetIndex) return;
+  const orderedIds = siblings.map((item) => item.id).filter((id) => id !== memberId);
+  orderedIds.splice(targetIndex, 0, memberId);
+  reorderSiblingGroup(orderedIds);
+  if (shouldRender) render();
+}
+
+function reorderSiblingGroup(orderedIds) {
+  const orderSet = new Set(orderedIds);
+  const orderedMembers = orderedIds
+    .map((id) => state.members.find((member) => member.id === id))
+    .filter(Boolean);
+  let cursor = 0;
+  state.members = state.members.map((member) => {
+    if (!orderSet.has(member.id)) return member;
+    const next = orderedMembers[cursor];
+    cursor += 1;
+    return next;
+  });
+}
+
 $("#expandAllBtn").addEventListener("click", () => {
   collapsed.clear();
   saveCollapsed();
@@ -919,7 +1001,7 @@ $("#expandAllBtn").addEventListener("click", () => {
 });
 $("#collapseAllBtn").addEventListener("click", () => {
   state.members.forEach((member) => {
-    if (childMembers(member.id).length) collapsed.add(member.id);
+    if (childMembers(member.id).length || outAdoptedChildren(member.id).length) collapsed.add(member.id);
   });
   saveCollapsed();
   renderTree();

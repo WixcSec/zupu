@@ -85,17 +85,21 @@
             姓名
             <input id="nameInput" required placeholder="如：李通崖" />
           </label>
+          <label>
+            性别
+            <select id="genderInput">
+              <option value="male">男</option>
+              <option value="female">女</option>
+            </select>
+          </label>
           <div class="two-col">
-            <label>
-              性别
-              <select id="genderInput">
-                <option value="male">男</option>
-                <option value="female">女</option>
-              </select>
-            </label>
             <label>
               世代
               <input id="generationInput" type="number" min="1" value="1" />
+            </label>
+            <label>
+              同层序号
+              <input id="siblingOrderInput" class="order-input" type="number" min="1" value="1" />
             </label>
           </div>
           <div class="two-col">
@@ -291,7 +295,16 @@
             女方身份
             <select id="spouseRoleInput">
               <option value="principal">正妻</option>
+              <option value="successor">继妻</option>
               <option value="concubine">妾</option>
+            </select>
+          </label>
+          <label>
+            婚配状态
+            <select id="marriageStatusInput">
+              <option value="current">在室</option>
+              <option value="deceased">已故</option>
+              <option value="divorced">和离</option>
             </select>
           </label>
           <label>

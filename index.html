@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>族谱</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">族谱 · 家乘 · 世系</p>
+        </div>
+        <div class="hero-actions">
+          <div class="moon-menu">
+            <button id="moonMenuBtn" class="moon-button" type="button" aria-expanded="false" aria-label="数据菜单">☾</button>
+            <div id="moonMenuPanel" class="moon-panel" hidden>
+              <button id="exportBtn" type="button">导出 JSON</button>
+              <label class="file-button">
+                导入 JSON
+                <input id="importInput" type="file" accept="application/json" />
+              </label>
+              <label class="menu-field">
+                字体
+                <select id="fontInput">
+                  <option value="serif">宋体</option>
+                  <option value="kai">楷体</option>
+                  <option value="sans">黑体</option>
+                </select>
+              </label>
+              <button id="resetBtn" class="ghost" type="button">清空族谱</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="layout">
+        <section class="content">
+          <div class="section-head">
+            <div>
+              <h2>分层世系图</h2>
+              <p id="summaryText">尚无族人</p>
+            </div>
+            <div class="section-actions">
+              <div class="mode-switch" aria-label="模式切换">
+                <button id="viewModeBtn" class="mode-button active" type="button">查看</button>
+                <button id="editModeBtn" class="mode-button" type="button">编辑</button>
+              </div>
+              <button id="expandAllBtn" class="ghost" type="button">展开全部</button>
+              <button id="collapseAllBtn" class="ghost" type="button">收起全部</button>
+              <button id="addRootBtn" class="edit-only" type="button">新增族人</button>
+            </div>
+          </div>
+          <div class="tree-panel">
+            <div class="search-wrap" aria-label="搜索族人">
+              <span>查</span>
+              <input id="searchInput" type="search" placeholder="姓名、字、号" />
+            </div>
+            <div id="treeView" class="tree-view" aria-live="polite"></div>
+          </div>
+        </section>
+      </section>
+
+      <dialog id="memberDialog">
+        <form id="memberForm" method="dialog" class="dialog-card member-dialog-card">
+          <div class="panel-head">
+            <h2 id="memberDialogTitle">新增族人</h2>
+            <button id="closeMemberBtn" class="icon-button" type="button" aria-label="关闭">×</button>
+          </div>
+          <input type="hidden" id="editingId" />
+          <label>
+            姓名
+            <input id="nameInput" required placeholder="如：沈怀瑾" />
+          </label>
+          <div class="two-col">
+            <label>
+              性别
+              <select id="genderInput">
+                <option value="male">男</option>
+                <option value="female">女</option>
+              </select>
+            </label>
+            <label>
+              世代
+              <input id="generationInput" type="number" min="1" value="1" />
+            </label>
+          </div>
+          <div class="two-col">
+            <label>
+              字
+              <input id="courtesyInput" placeholder="可选" />
+            </label>
+            <label>
+              号
+              <input id="styleInput" placeholder="可选" />
+            </label>
+          </div>
+          <div class="two-col">
+            <label>
+              父亲
+              <select id="fatherInput">
+                <option value="">未记载</option>
+              </select>
+            </label>
+            <label>
+              母亲
+              <select id="motherInput">
+                <option value="">未记载</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            出身
+            <select id="birthStatusInput">
+              <option value="">按父母婚配自动判断</option>
+              <option value="legitimate">嫡出</option>
+              <option value="shu">庶出</option>
+              <option value="matrilocal">入赘支</option>
+              <option value="unknown">嫡庶未明</option>
+            </select>
+          </label>
+          <div class="two-col">
+            <label>
+              生死
+              <select id="lifeStatusInput">
+                <option value="alive">生</option>
+                <option value="dead">死</option>
+              </select>
+            </label>
+            <label>
+              死时级别
+              <input id="deathRankInput" placeholder="如：从五品、庶民、诰命" />
+            </label>
+          </div>
+          <label>
+            死因
+            <input id="deathCauseInput" placeholder="如：病逝、战殁、卒于任上" />
+          </label>
+          <label>
+            备注
+            <textarea id="notesInput" rows="3" placeholder="籍贯、官职、生卒年、迁徙等"></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="submit">保存族人</button>
+            <button id="cancelEditBtn" class="ghost" type="button">取消</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog id="marriageDialog">
+        <form id="marriageForm" method="dialog" class="dialog-card">
+          <div class="panel-head">
+            <h2>登记婚配</h2>
+            <button id="closeMarriageBtn" class="icon-button" type="button" aria-label="关闭">×</button>
+          </div>
+          <label>
+            男方
+            <select id="husbandInput" required></select>
+          </label>
+          <label>
+            女方
+            <select id="wifeInput" required></select>
+          </label>
+          <label>
+            婚入方式
+            <select id="residenceInput">
+              <option value="patrilocal">女方嫁入男方家</option>
+              <option value="matrilocal">男方入赘女方家</option>
+            </select>
+          </label>
+          <label>
+            女方身份
+            <select id="spouseRoleInput">
+              <option value="principal">正妻</option>
+              <option value="concubine">妾</option>
+            </select>
+          </label>
+          <label>
+            婚配备注
+            <input id="marriageNotesInput" placeholder="如：继室、侧室、某年入门" />
+          </label>
+          <button type="submit">保存婚配</button>
+        </form>
+      </dialog>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

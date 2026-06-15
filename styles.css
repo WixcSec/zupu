@@ -1005,6 +1005,34 @@ label {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+  display: grid;
+  gap: 6px;
+}
+
+.spouse-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.text-chip {
+  border: 1px solid rgba(137, 128, 120, 0.32);
+  background: rgba(255, 249, 240, 0.72);
+  color: var(--deep);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.text-chip:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.danger-chip {
+  color: var(--danger);
+  border-color: rgba(154, 80, 71, 0.4);
 }
 
 .branch-note {

@@ -249,12 +249,13 @@
       <dialog id="deleteDialog">
         <form id="deleteForm" method="dialog" class="dialog-card delete-dialog-card">
           <div class="panel-head">
-            <h2>删除族人</h2>
+            <h2 id="deleteDialogTitle">删除族人</h2>
             <button id="closeDeleteBtn" class="icon-button" type="button" aria-label="关闭">×</button>
           </div>
+          <input type="hidden" id="deleteKindInput" />
           <input type="hidden" id="deleteMemberId" />
           <p id="deleteMessage" class="dialog-message"></p>
-          <div class="warning-box">相关婚配会一并移除，子女的父母记录会清空。</div>
+          <div id="deleteWarning" class="warning-box">相关婚配会一并移除，子女的父母记录会清空。</div>
           <div class="form-actions">
             <button class="danger-fill-button" type="submit">确认删除</button>
             <button id="cancelDeleteBtn" class="ghost" type="button">取消</button>
@@ -268,6 +269,7 @@
             <h2>登记婚配</h2>
             <button id="closeMarriageBtn" class="icon-button" type="button" aria-label="关闭">×</button>
           </div>
+          <input type="hidden" id="marriageIdInput" />
           <label>
             已有男方
             <select id="husbandInput"></select>

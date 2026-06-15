@@ -254,7 +254,10 @@ function spouseLines(memberId) {
       if (residence === "matrilocal" || !isHusband) details.push(residenceText(residence));
       if (status) details.push(status);
       if (item.notes) details.push(item.notes);
-      return `${role}：${otherName}${details.length ? `（${details.join("，")}）` : ""}`;
+      return {
+        id: item.id,
+        text: `${role}：${otherName}${details.length ? `（${details.join("，")}）` : ""}`
+      };
     });
 }
 
@@ -374,15 +377,33 @@ function setFont(nextFont) {
 function renderSelectors() {
   const males = state.members.filter((member) => member.gender === "male");
   const females = state.members.filter((member) => member.gender === "female");
-  fillSelect($("#fatherInput"), males, "未记载");
-  fillSelect($("#motherInput"), females, "未记载");
-  fillSelect($("#adoptiveParentInput"), state.members, "无");
+  renderMemberRelationSelectors();
   fillSelect($("#husbandInput"), males, "请选择男方", false);
   fillSelect($("#wifeInput"), females, "请选择女方", false);
 }
 
-function fillSelect(select, items, placeholder, includeBlank = true) {
-  const current = select.value;
+function renderMemberRelationSelectors() {
+  const editingId = $("#editingId").value;
+  const generation = Number($("#generationInput").value) || 1;
+  const olderMales = state.members.filter((member) => member.gender === "male" && member.id !== editingId && (Number(member.generation) || 1) < generation);
+  fillSelect($("#fatherInput"), olderMales, "未记载");
+  fillSelect($("#adoptiveParentInput"), olderMales, "无");
+  const fatherId = $("#fatherInput").value;
+  fillSelect($("#motherInput"), mothersForFather(fatherId), fatherId ? "未记载" : "请先选择父亲");
+}
+
+function mothersForFather(fatherId) {
+  if (!fatherId) return [];
+  const wifeIds = new Set(
+    state.marriages
+      .filter((item) => item.husbandId === fatherId)
+      .map((item) => item.wifeId)
+  );
+  return state.members.filter((member) => wifeIds.has(member.id));
+}
+
+function fillSelect(select, items, placeholder, includeBlank = true, selectedValue = select.value) {
+  const current = selectedValue;
   select.innerHTML = includeBlank ? `<option value="">${placeholder}</option>` : `<option value="">${placeholder}</option>`;
   items
     .sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, "zh-Hans-CN"))
@@ -599,7 +620,15 @@ function renderCard(member, options = {}) {
           .map((tag) => `<span class="${tagClass(tag)}">${escapeHtml(tag)}</span>`)
           .join("")}
       </div>
-      ${spouses.length ? `<div class="spouse-row">${spouses.map((row) => `<div class="spouse-pill">${escapeHtml(row)}</div>`).join("")}</div>` : ""}
+      ${spouses.length ? `<div class="spouse-row">${spouses.map((row) => `
+        <div class="spouse-pill">
+          <span>${escapeHtml(row.text)}</span>
+          <span class="spouse-actions edit-only">
+            <button class="text-chip" type="button" data-action="editMarriage" data-id="${row.id}">编辑</button>
+            <button class="text-chip danger-chip" type="button" data-action="deleteMarriage" data-id="${row.id}">删除</button>
+          </span>
+        </div>
+      `).join("")}</div>` : ""}
       ${detailRows.length ? `<div class="detail-grid">${detailRows.join("")}</div>` : ""}
       <div class="relations">${relationRows.map((row) => `<div>${escapeHtml(row)}</div>`).join("")}</div>
       ${isCollapsed ? `<div class="branch-note">此脉已收起，共 ${descendants} 位后裔</div>` : ""}
@@ -720,6 +749,7 @@ function resetForm() {
   $("#shentongInput").value = "";
   $("#jinxingInput").value = "";
   $("#deathCauseInput").value = "";
+  renderMemberRelationSelectors();
 }
 
 function openMemberDialog(title = "新增族人") {
@@ -767,8 +797,11 @@ function editMember(id) {
   $("#genderInput").value = member.gender;
   $("#generationInput").value = member.generation || 1;
   $("#siblingOrderInput").value = siblingOrderInfo(member).index;
+  renderMemberRelationSelectors();
   $("#styleInput").value = member.styleName || "";
   $("#fatherInput").value = member.fatherId || "";
+  $("#adoptiveParentInput").value = member.adoptiveParentId || "";
+  renderMemberRelationSelectors();
   $("#motherInput").value = member.motherId || "";
   $("#motherGroupInput").value = member.motherGroup || "";
   $("#birthStatusInput").value = member.birthStatus || "";
@@ -790,14 +823,23 @@ function editMember(id) {
 
 function openDeleteDialog(id) {
   const name = memberName(id);
+  $("#deleteKindInput").value = "member";
   $("#deleteMemberId").value = id;
+  $("#deleteDialogTitle").textContent = "删除族人";
   $("#deleteMessage").textContent = `确定删除「${name}」？`;
+  $("#deleteWarning").textContent = "相关婚配会一并移除，子女的父母记录会清空。";
   $("#deleteDialog").showModal();
 }
 
 function deleteMember(id) {
+  const relatedMarriages = state.marriages.filter((item) => item.husbandId === id || item.wifeId === id);
+  const removableSpouses = new Set();
+  relatedMarriages.forEach((marriage) => {
+    const otherId = marriage.husbandId === id ? marriage.wifeId : marriage.husbandId;
+    if (canRemoveIsolatedSpouse(otherId, marriage.id)) removableSpouses.add(otherId);
+  });
   state.members = state.members
-    .filter((member) => member.id !== id)
+    .filter((member) => member.id !== id && !removableSpouses.has(member.id))
     .map((member) => ({
       ...member,
       fatherId: member.fatherId === id ? "" : member.fatherId,
@@ -819,7 +861,9 @@ function prepareChild(parentId) {
   }
   resetForm();
   $("#generationInput").value = (Number(parent.generation) || 1) + 1;
+  renderMemberRelationSelectors();
   $("#fatherInput").value = parent.id;
+  renderMemberRelationSelectors();
   openMemberDialog(`为 ${parent.name} 添子女`);
 }
 
@@ -836,6 +880,7 @@ function openExternalChildrenDialog(memberId) {
 function prepareSpouse(memberId) {
   const member = state.members.find((item) => item.id === memberId);
   if (!member) return;
+  $("#marriageIdInput").value = "";
   $("#husbandInput").value = member.gender === "male" ? member.id : "";
   $("#wifeInput").value = member.gender === "female" ? member.id : "";
   $("#newHusbandInput").value = "";
@@ -845,6 +890,59 @@ function prepareSpouse(memberId) {
   $("#residenceInput").value = "patrilocal";
   $("#marriageNotesInput").value = "";
   els.dialog.showModal();
+}
+
+function editMarriage(id) {
+  const marriage = state.marriages.find((item) => item.id === id);
+  if (!marriage) return;
+  $("#marriageIdInput").value = marriage.id;
+  $("#husbandInput").value = marriage.husbandId || "";
+  $("#wifeInput").value = marriage.wifeId || "";
+  $("#newHusbandInput").value = "";
+  $("#newWifeInput").value = "";
+  $("#spouseRoleInput").value = marriage.role || "principal";
+  $("#marriageStatusInput").value = marriage.marriageStatus || "current";
+  $("#residenceInput").value = marriage.residence || "patrilocal";
+  $("#marriageNotesInput").value = marriage.notes || "";
+  els.dialog.showModal();
+}
+
+function deleteMarriage(id) {
+  const marriage = state.marriages.find((item) => item.id === id);
+  if (!marriage) return;
+  $("#deleteKindInput").value = "marriage";
+  $("#deleteMemberId").value = id;
+  $("#deleteDialogTitle").textContent = "删除婚配";
+  $("#deleteMessage").textContent = `确定删除「${memberName(marriage.husbandId)}」与「${memberName(marriage.wifeId)}」的婚配记录？`;
+  $("#deleteWarning").textContent = "如果对方只是孤立的妻妾/夫婿，且没有子女或其他关系，会一并从图谱中移除。";
+  $("#deleteDialog").showModal();
+}
+
+function confirmDeleteMarriage(id) {
+  const marriage = state.marriages.find((item) => item.id === id);
+  if (!marriage) return;
+  const removableIds = removableSpouseIdsAfterMarriageDelete(marriage);
+  state.marriages = state.marriages.filter((item) => item.id !== id);
+  state.members = state.members.filter((member) => !removableIds.has(member.id));
+  render();
+}
+
+function removableSpouseIdsAfterMarriageDelete(marriage) {
+  const residence = marriage.residence || "patrilocal";
+  const ids = [];
+  if (residence === "patrilocal") ids.push(marriage.wifeId);
+  if (residence === "matrilocal") ids.push(marriage.husbandId);
+  return new Set(ids.filter((id) => canRemoveIsolatedSpouse(id, marriage.id)));
+}
+
+function canRemoveIsolatedSpouse(memberId, deletingMarriageId) {
+  const member = state.members.find((item) => item.id === memberId);
+  if (!member) return false;
+  if (birthLineageParentId(member) || member.adoptiveParentId) return false;
+  if (member.externalChildren || member.notes) return false;
+  const hasOtherMarriage = state.marriages.some((item) => item.id !== deletingMarriageId && (item.husbandId === memberId || item.wifeId === memberId));
+  if (hasOtherMarriage) return false;
+  return !state.members.some((item) => item.fatherId === memberId || item.motherId === memberId || item.adoptiveParentId === memberId);
 }
 
 function createSpouseMember(name, gender, spouseId) {
@@ -925,7 +1023,10 @@ els.marriageForm.addEventListener("submit", (event) => {
     return;
   }
 
-  const existing = state.marriages.find((item) => item.husbandId === husbandId && item.wifeId === wifeId);
+  const marriageId = $("#marriageIdInput").value;
+  const existing = marriageId
+    ? state.marriages.find((item) => item.id === marriageId)
+    : state.marriages.find((item) => item.husbandId === husbandId && item.wifeId === wifeId);
   const marriage = {
     id: existing?.id || uid("r"),
     husbandId,
@@ -964,6 +1065,8 @@ els.treeView.addEventListener("click", (event) => {
   if (action === "delete") openDeleteDialog(id);
   if (action === "child") prepareChild(id);
   if (action === "spouse") prepareSpouse(id);
+  if (action === "editMarriage") editMarriage(id);
+  if (action === "deleteMarriage") deleteMarriage(id);
 });
 
 function setMemberSiblingOrder(memberId, nextOrder, shouldRender = true) {
@@ -1023,13 +1126,19 @@ els.talismanTotalInput.addEventListener("input", () => {
   localStorage.setItem(TALISMAN_TOTAL_KEY, String(talismanTotal));
   updateTalismanStats();
 });
+$("#generationInput").addEventListener("input", renderMemberRelationSelectors);
+$("#fatherInput").addEventListener("change", renderMemberRelationSelectors);
 $("#viewModeBtn").addEventListener("click", () => setMode("view"));
 $("#editModeBtn").addEventListener("click", () => setMode("edit"));
 $("#addRootBtn").addEventListener("click", () => {
   resetForm();
   openMemberDialog("新增族人");
 });
-$("#closeMarriageBtn").addEventListener("click", () => els.dialog.close());
+$("#closeMarriageBtn").addEventListener("click", () => {
+  els.marriageForm.reset();
+  $("#marriageIdInput").value = "";
+  els.dialog.close();
+});
 $("#closeMemberBtn").addEventListener("click", () => {
   resetForm();
   els.memberDialog.close();
@@ -1043,8 +1152,13 @@ $("#cancelExternalChildrenBtn").addEventListener("click", () => $("#externalChil
 $("#deleteForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const id = $("#deleteMemberId").value;
+  const kind = $("#deleteKindInput").value;
   $("#deleteDialog").close();
-  deleteMember(id);
+  if (kind === "marriage") {
+    confirmDeleteMarriage(id);
+  } else {
+    deleteMember(id);
+  }
 });
 $("#closeDeleteBtn").addEventListener("click", () => $("#deleteDialog").close());
 $("#cancelDeleteBtn").addEventListener("click", () => $("#deleteDialog").close());

@@ -557,10 +557,34 @@ function prepareSpouse(memberId) {
   if (!member) return;
   $("#husbandInput").value = member.gender === "male" ? member.id : "";
   $("#wifeInput").value = member.gender === "female" ? member.id : "";
+  $("#newHusbandInput").value = "";
+  $("#newWifeInput").value = "";
   $("#spouseRoleInput").value = "principal";
   $("#residenceInput").value = "patrilocal";
   $("#marriageNotesInput").value = "";
   els.dialog.showModal();
+}
+
+function createSpouseMember(name, gender, spouseId) {
+  const spouse = state.members.find((member) => member.id === spouseId);
+  const generation = spouse ? Number(spouse.generation) || 1 : 1;
+  const member = {
+    id: uid("m"),
+    name,
+    gender,
+    generation,
+    courtesy: "",
+    styleName: "",
+    fatherId: "",
+    motherId: "",
+    birthStatus: "",
+    lifeStatus: "alive",
+    deathRank: "",
+    deathCause: "",
+    notes: ""
+  };
+  state.members.push(member);
+  return member.id;
 }
 
 els.memberForm.addEventListener("submit", (event) => {
@@ -581,9 +605,21 @@ els.memberForm.addEventListener("submit", (event) => {
 
 els.marriageForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  const husbandId = $("#husbandInput").value;
-  const wifeId = $("#wifeInput").value;
-  if (!husbandId || !wifeId) return;
+  let husbandId = $("#husbandInput").value;
+  let wifeId = $("#wifeInput").value;
+  const newHusbandName = $("#newHusbandInput").value.trim();
+  const newWifeName = $("#newWifeInput").value.trim();
+
+  if (!husbandId && newHusbandName) {
+    husbandId = createSpouseMember(newHusbandName, "male", wifeId);
+  }
+  if (!wifeId && newWifeName) {
+    wifeId = createSpouseMember(newWifeName, "female", husbandId);
+  }
+  if (!husbandId || !wifeId) {
+    alert("请选择已有男方/女方，或填写新男方/新女方姓名。");
+    return;
+  }
 
   const existing = state.marriages.find((item) => item.husbandId === husbandId && item.wifeId === wifeId);
   const marriage = {
@@ -686,6 +722,69 @@ $("#exportBtn").addEventListener("click", () => {
   els.moonMenuPanel.hidden = true;
   els.moonMenuBtn.setAttribute("aria-expanded", "false");
 });
+
+$("#exportTreeBtn").addEventListener("click", () => {
+  exportTreeSvg();
+  els.moonMenuPanel.hidden = true;
+  els.moonMenuBtn.setAttribute("aria-expanded", "false");
+});
+
+function exportTreeSvg() {
+  if (!els.treeView.querySelector(".lineage-forest")) {
+    alert("当前没有可导出的谱图。");
+    return;
+  }
+  const tree = els.treeView.cloneNode(true);
+  const width = Math.max(900, els.treeView.scrollWidth);
+  const height = Math.max(520, els.treeView.scrollHeight);
+  tree.style.width = `${width}px`;
+  tree.style.height = `${height}px`;
+  tree.style.overflow = "visible";
+  tree.style.padding = "48px 48px 56px";
+
+  const css = [...document.styleSheets]
+    .map((sheet) => {
+      try {
+        return [...sheet.cssRules].map((rule) => rule.cssText).join("\n");
+      } catch {
+        return "";
+      }
+    })
+    .join("\n");
+
+  const html = `
+    <div xmlns="http://www.w3.org/1999/xhtml" class="${document.body.className}" style="background:#fbf2e5;width:${width}px;min-height:${height}px;">
+      <style>
+        ${css}
+        .tree-view { overflow: visible !important; border: 0 !important; margin: 0 !important; box-shadow: none !important; }
+        .card-actions, .search-wrap { display: none !important; }
+      </style>
+      ${tree.outerHTML}
+    </div>
+  `;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <foreignObject width="100%" height="100%">${html}</foreignObject>
+    </svg>
+  `;
+  downloadBlob(svg.trim(), `zupu-tree-${new Date().toISOString().slice(0, 10)}.svg`, "image/svg+xml;charset=utf-8");
+  alert("谱图 SVG 已开始导出。");
+}
+
+function downloadBlob(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    link.remove();
+  }, 1000);
+}
 
 els.importInput.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];

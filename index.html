@@ -14,9 +14,14 @@
         </div>
         <div class="hero-actions">
           <div class="moon-menu">
-            <button id="moonMenuBtn" class="moon-button" type="button" aria-expanded="false" aria-label="数据菜单">☾</button>
+            <button id="moonMenuBtn" class="moon-button mirror-button" type="button" aria-expanded="false" aria-label="数据菜单">
+              <span class="mirror-face" aria-hidden="true">
+                <span class="mirror-moon"></span>
+              </span>
+            </button>
             <div id="moonMenuPanel" class="moon-panel" hidden>
               <button id="exportBtn" type="button">导出 JSON</button>
+              <button id="exportTreeBtn" type="button">导出谱图 SVG</button>
               <label class="file-button">
                 导入 JSON
                 <input id="importInput" type="file" accept="application/json" />
@@ -155,12 +160,20 @@
             <button id="closeMarriageBtn" class="icon-button" type="button" aria-label="关闭">×</button>
           </div>
           <label>
-            男方
-            <select id="husbandInput" required></select>
+            已有男方
+            <select id="husbandInput"></select>
           </label>
           <label>
-            女方
-            <select id="wifeInput" required></select>
+            新男方姓名
+            <input id="newHusbandInput" placeholder="用于登记入赘夫婿" />
+          </label>
+          <label>
+            已有女方
+            <select id="wifeInput"></select>
+          </label>
+          <label>
+            新女方姓名
+            <input id="newWifeInput" placeholder="用于直接新增妻妾" />
           </label>
           <label>
             婚入方式

@@ -745,6 +745,43 @@ label {
   box-shadow: 0 10px 22px rgba(60, 55, 49, 0.08);
 }
 
+body:not(.view-mode) .member-card[draggable="true"] {
+  cursor: grab;
+}
+
+body:not(.view-mode) .member-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.member-card.dragging {
+  opacity: 0.46;
+}
+
+.member-card.drop-before,
+.member-card.drop-after {
+  outline: 1px dashed rgba(111, 103, 95, 0.48);
+  outline-offset: 4px;
+}
+
+.member-card.drop-before::before,
+.member-card.drop-after::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 999px;
+  background: rgba(111, 103, 95, 0.52);
+}
+
+.member-card.drop-before::before {
+  left: -12px;
+}
+
+.member-card.drop-after::before {
+  right: -12px;
+}
+
 .member-card.collapsed {
   border-style: dashed;
   background: rgba(228, 218, 207, 0.72);

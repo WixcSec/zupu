@@ -93,6 +93,9 @@ function normalizeMember(member) {
     shentong: "",
     jinxing: "",
     externalChildren: "",
+    adoptiveParentId: "",
+    adoptionType: "",
+    adoptionNote: "",
     ...member
   };
   if (!CULTIVATION_LEVELS.includes(normalized.deathRank)) normalized.deathRank = "凡人";
@@ -293,6 +296,8 @@ function filteredMembers() {
       member.shentong,
       member.jinxing,
       member.externalChildren,
+      member.adoptionNote,
+      member.adoptiveParentId ? `${adoptionTypeText(member.adoptionType)} 承嗣 嗣子 兼祧 出继 ${memberName(member.adoptiveParentId)}` : "",
       member.motherGroup,
       member.talismanSeed === "yes" ? "符种 已受符种" : "",
       isAliveTalismanMember(member) ? "在世符种 符种在世 在世符咒 符咒在世" : "",
@@ -353,6 +358,7 @@ function renderSelectors() {
   const females = state.members.filter((member) => member.gender === "female");
   fillSelect($("#fatherInput"), males, "未记载");
   fillSelect($("#motherInput"), females, "未记载");
+  fillSelect($("#adoptiveParentInput"), state.members, "无");
   fillSelect($("#husbandInput"), males, "请选择男方", false);
   fillSelect($("#wifeInput"), females, "请选择女方", false);
 }
@@ -403,6 +409,9 @@ function countGraphMembers(roots, visibleIds) {
     if (!member || seen.has(member.id) || !visibleIds.has(member.id) || isSpouseOnly(member)) return;
     seen.add(member.id);
     childMembers(member.id).forEach(visit);
+    adoptiveChildren(member.id).forEach((child) => {
+      if (visibleIds.has(child.id)) seen.add(`${member.id}:adoptive:${child.id}`);
+    });
   };
   roots.forEach(visit);
   return seen.size;
@@ -410,15 +419,65 @@ function countGraphMembers(roots, visibleIds) {
 
 function renderNode(member, visibleIds) {
   const children = childMembers(member.id).filter((child) => visibleIds.has(child.id));
+  const adoptive = adoptiveChildren(member.id).filter((child) => visibleIds.has(child.id));
   const isCollapsed = collapsed.has(member.id);
-  const canCollapse = children.length > 0;
-  const descendants = hiddenDescendantCount(member.id);
+  const canCollapse = children.length > 0 || adoptive.length > 0;
+  const descendants = hiddenDescendantCount(member.id) + adoptive.length;
   const card = renderCard(member, { canCollapse, isCollapsed, descendants });
-  const childTree =
-    children.length && !isCollapsed
-      ? renderMotherGroups(member, children, visibleIds)
-      : "";
-  return `<div class="lineage-node ${children.length ? "has-children has-mother-groups" : ""}">${card}${childTree}</div>`;
+  const nodeClasses = ["lineage-node"];
+  if (canCollapse) nodeClasses.push("has-children", "has-mother-groups");
+  if (adoptive.length && !children.length) nodeClasses.push("has-adoptive-only");
+  const childTree = !isCollapsed
+    ? [
+        children.length ? renderMotherGroups(member, children, visibleIds) : "",
+        adoptive.length ? renderAdoptiveGroup(member, adoptive) : ""
+      ].join("")
+    : "";
+  return `<div class="${nodeClasses.join(" ")}">${card}${childTree}</div>`;
+}
+
+function adoptiveChildren(memberId) {
+  return state.members
+    .filter((member) => member.adoptiveParentId === memberId)
+    .sort((a, b) => a.generation - b.generation || memberIndex(a.id) - memberIndex(b.id));
+}
+
+function renderAdoptiveGroup(parent, children) {
+  return `
+    <div class="adoptive-group">
+      <div class="adoptive-node">承嗣</div>
+      <div class="adoptive-children">
+        ${children.map((child) => renderAdoptiveCard(parent, child)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderAdoptiveCard(parent, child) {
+  const type = adoptionTypeText(child.adoptionType) || "嗣子";
+  const details = [
+    child.fatherId ? `本生父：${memberName(child.fatherId)}` : "",
+    child.motherId ? `本生母：${memberName(child.motherId)}` : "",
+    child.adoptionNote
+  ].filter(Boolean);
+  return `
+    <article class="member-card adoptive-card">
+      <div class="member-top">
+        <div>
+          <div class="adoptive-kicker">${escapeHtml(type)} · 承嗣于 ${escapeHtml(parent.name)}</div>
+          <div class="member-name">${escapeHtml(child.name)}</div>
+        </div>
+      </div>
+      <div class="tags">
+        <span class="tag adoptive-tag">${escapeHtml(type)}</span>
+        <span class="${tagClass(statusText(child))}">${escapeHtml(statusText(child))}</span>
+      </div>
+      <div class="relations">${details.map((row) => `<div>${escapeHtml(row)}</div>`).join("")}</div>
+      <div class="card-actions">
+        <button class="small-button ghost" type="button" data-action="edit" data-id="${child.id}">编辑</button>
+      </div>
+    </article>
+  `;
 }
 
 function renderMotherGroups(parent, children, visibleIds) {
@@ -472,6 +531,7 @@ function renderCard(member, options = {}) {
     genderText(member.gender),
     lineageLabel(member),
     legitimacyFor(member),
+    adoptionTypeText(member.adoptionType),
     statusText(member),
     member.lifeStatus === "dead" && member.deathCause ? `死因：${member.deathCause}` : ""
   ].filter(Boolean);
@@ -533,8 +593,18 @@ function memberDetailRows(member) {
   pushRow([item("仙基", member.xianji), item("神通", member.shentong)], "split");
   pushRow([item("金性", member.jinxing)], "single");
   if (member.gender === "female") pushRow([item("外嫁子嗣", member.externalChildren)], "single");
+  if (member.adoptiveParentId) {
+    pushRow([item("承嗣于", memberName(member.adoptiveParentId)), item("承嗣备注", member.adoptionNote)], "split");
+  }
   pushRow([item("字", member.courtesy)], "single muted-row");
   return rows;
+}
+
+function adoptionTypeText(value) {
+  if (value === "heir") return "嗣子";
+  if (value === "jiao") return "兼祧";
+  if (value === "out") return "出继";
+  return "";
 }
 
 function talismanText(value) {
@@ -569,6 +639,7 @@ function tagClass(tag) {
   if (tag.includes("已故")) classes.push("dead");
   if (tag.startsWith("死因")) classes.push("death-cause");
   if (tag === "入赘支") classes.push("legitimate");
+  if (tag === "嗣子" || tag === "兼祧" || tag === "出继") classes.push("adoptive-tag");
   return classes.join(" ");
 }
 
@@ -588,6 +659,9 @@ function resetForm() {
   $("#generationInput").value = 1;
   $("#birthStatusInput").value = "";
   $("#motherGroupInput").value = "";
+  $("#adoptiveParentInput").value = "";
+  $("#adoptionTypeInput").value = "";
+  $("#adoptionNoteInput").value = "";
   $("#deathRankInput").value = "凡人";
   $("#talismanSeedInput").value = "";
   $("#luqiInput").value = "";
@@ -618,6 +692,9 @@ function memberFromForm() {
     motherId: $("#motherInput").value,
     motherGroup: $("#motherGroupInput").value.trim(),
     birthStatus: $("#birthStatusInput").value,
+    adoptiveParentId: $("#adoptiveParentInput").value === id ? "" : $("#adoptiveParentInput").value,
+    adoptionType: $("#adoptionTypeInput").value,
+    adoptionNote: $("#adoptionNoteInput").value.trim(),
     lifeStatus: $("#lifeStatusInput").value,
     deathRank: $("#deathRankInput").value,
     talismanSeed: $("#talismanSeedInput").value,
@@ -644,6 +721,9 @@ function editMember(id) {
   $("#motherInput").value = member.motherId || "";
   $("#motherGroupInput").value = member.motherGroup || "";
   $("#birthStatusInput").value = member.birthStatus || "";
+  $("#adoptiveParentInput").value = member.adoptiveParentId || "";
+  $("#adoptionTypeInput").value = member.adoptionType || "";
+  $("#adoptionNoteInput").value = member.adoptionNote || "";
   $("#lifeStatusInput").value = member.lifeStatus || "alive";
   $("#deathRankInput").value = CULTIVATION_LEVELS.includes(member.deathRank) ? member.deathRank : "凡人";
   $("#talismanSeedInput").value = member.talismanSeed || "";
@@ -670,7 +750,8 @@ function deleteMember(id) {
     .map((member) => ({
       ...member,
       fatherId: member.fatherId === id ? "" : member.fatherId,
-      motherId: member.motherId === id ? "" : member.motherId
+      motherId: member.motherId === id ? "" : member.motherId,
+      adoptiveParentId: member.adoptiveParentId === id ? "" : member.adoptiveParentId
     }));
   state.marriages = state.marriages.filter((item) => item.husbandId !== id && item.wifeId !== id);
   collapsed.delete(id);
@@ -737,6 +818,9 @@ function createSpouseMember(name, gender, spouseId) {
     shentong: "",
     jinxing: "",
     externalChildren: "",
+    adoptiveParentId: "",
+    adoptionType: "",
+    adoptionNote: "",
     deathCause: "",
     notes: ""
   };

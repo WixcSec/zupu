@@ -284,12 +284,67 @@ h2 {
   gap: 14px;
 }
 
-.search-wrap {
+.tree-tools {
   position: absolute;
   top: 12px;
   right: 12px;
   z-index: 5;
-  flex: 0 0 220px;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  width: 220px;
+}
+
+.talisman-counter {
+  display: grid;
+  grid-template-columns: auto 38px 1fr;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 34px;
+  border: 1px solid rgba(209, 199, 187, 0.95);
+  border-radius: 999px;
+  background: rgba(255, 249, 240, 0.9);
+  padding: 4px 9px 4px 12px;
+  color: var(--deep);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.talisman-counter span {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.talisman-counter input {
+  height: 22px;
+  border-radius: 999px;
+  padding: 2px 5px;
+  text-align: center;
+  font-size: 12px;
+  background: rgba(255, 253, 248, 0.68);
+}
+
+.talisman-counter input::-webkit-outer-spin-button,
+.talisman-counter input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.talisman-counter input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.talisman-counter b {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.search-wrap {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 0;
@@ -428,7 +483,7 @@ label {
 
 .tree-view {
   overflow-x: auto;
-  padding: 64px max(16px, calc((100% - 268px) / 2)) 30px;
+  padding: 104px max(16px, calc((100% - 268px) / 2)) 30px;
   min-height: 360px;
 }
 
@@ -700,6 +755,12 @@ label {
   background: rgba(155, 61, 53, 0.08);
 }
 
+.tag.death-cause {
+  color: #7f5d55;
+  border-color: rgba(127, 93, 85, 0.25);
+  background: rgba(127, 93, 85, 0.08);
+}
+
 .relations {
   color: var(--muted);
   line-height: 1.7;
@@ -729,6 +790,116 @@ label {
   font-size: 13px;
 }
 
+.detail-grid {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed rgba(137, 128, 120, 0.42);
+}
+
+.detail-row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.detail-row.single .detail-item {
+  width: auto;
+}
+
+.detail-row.split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-row.split .detail-item {
+  min-width: 0;
+}
+
+.detail-row.triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.detail-row.triple .detail-item {
+  min-width: 0;
+}
+
+.detail-row.muted-row {
+  opacity: 0.86;
+}
+
+.detail-item {
+  display: inline-flex;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 0;
+}
+
+.detail-item b {
+  flex: 0 0 auto;
+  color: rgba(111, 103, 95, 0.82);
+  font-weight: 600;
+  min-width: 28px;
+  border: 1px solid rgba(137, 128, 120, 0.16);
+  border-left: 1px solid rgba(137, 128, 120, 0.24);
+  border-radius: 4px;
+  background: rgba(255, 249, 240, 0.42);
+  padding: 1px 6px;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.detail-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #514b45;
+}
+
+.detail-item.luqi {
+  font-weight: 600;
+}
+
+.detail-item.lianqi {
+  color: #8b8f92;
+}
+
+.detail-item.lianqi span {
+  color: #8b8f92;
+}
+
+.detail-item.zhuji {
+  color: #c8c0b4;
+  text-shadow: 0 1px 0 rgba(60, 55, 49, 0.28);
+}
+
+.detail-item.zhuji span {
+  color: #c8c0b4;
+  text-shadow: 0 1px 0 rgba(60, 55, 49, 0.28);
+}
+
+.detail-item.zifu {
+  color: #3f8f9b;
+}
+
+.detail-item.zifu span {
+  color: #3f8f9b;
+}
+
+.detail-item.jindan {
+  color: #c59a2e;
+}
+
+.detail-item.jindan span {
+  color: #c59a2e;
+}
+
 .card-actions {
   display: flex;
   flex-wrap: wrap;
@@ -755,6 +926,16 @@ body.view-mode .branch-toggle {
   border-color: var(--danger);
   color: var(--danger);
   background: transparent;
+}
+
+.danger-fill-button {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.danger-fill-button:hover {
+  background: #88443d;
+  border-color: #88443d;
 }
 
 .empty-state {
@@ -789,6 +970,26 @@ dialog::backdrop {
 
 .member-dialog-card {
   width: min(620px, calc(100vw - 32px));
+}
+
+.delete-dialog-card {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.dialog-message {
+  color: var(--ink);
+  line-height: 1.7;
+  margin-bottom: 0;
+}
+
+.warning-box {
+  border: 1px dashed rgba(154, 80, 71, 0.34);
+  border-radius: 8px;
+  background: rgba(154, 80, 71, 0.06);
+  color: #7f5d55;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 @media (max-width: 860px) {

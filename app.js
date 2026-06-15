@@ -2,6 +2,7 @@ const STORAGE_KEY = "qingya-genealogy-v1";
 const COLLAPSE_KEY = "qingya-genealogy-collapsed-v1";
 const MODE_KEY = "qingya-genealogy-mode-v1";
 const FONT_KEY = "qingya-genealogy-font-v1";
+const TALISMAN_TOTAL_KEY = "qingya-genealogy-talisman-total-v1";
 const GENERATION_WORDS = [
   ["玄", "景"],
   ["渊", "清"],
@@ -17,12 +18,14 @@ const GENERATION_WORDS = [
   ["灵", "初"]
 ];
 const SECOND_GENERATION_ORDER = ["伯", "仲", "叔", "季"];
+const CULTIVATION_LEVELS = ["凡人", "胎息", "练气", "筑基", "紫府", "金丹", "道胎", "仙人"];
 
 
 let state = loadState();
 let collapsed = loadCollapsed();
 let mode = localStorage.getItem(MODE_KEY) || "view";
-let fontMode = localStorage.getItem(FONT_KEY) || "serif";
+let fontMode = localStorage.getItem(FONT_KEY) || "kai";
+let talismanTotal = Number(localStorage.getItem(TALISMAN_TOTAL_KEY)) || 0;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -34,6 +37,8 @@ const els = {
   marriageForm: $("#marriageForm"),
   dialog: $("#marriageDialog"),
   search: $("#searchInput"),
+  talismanTotalInput: $("#talismanTotalInput"),
+  talismanAliveCount: $("#talismanAliveCount"),
   importInput: $("#importInput"),
   fontInput: $("#fontInput"),
   moonMenuBtn: $("#moonMenuBtn"),
@@ -57,7 +62,7 @@ function normalizeState(data) {
   const members = Array.isArray(data.members)
     ? data.members
         .filter((member) => !(legacySampleIds.has(member.id) && legacySampleNames.has(member.name)))
-        .map((member) => ({ birthStatus: "", deathCause: "", ...member }))
+        .map((member) => normalizeMember(member))
     : [];
   const removedIds = new Set(
     Array.isArray(data.members)
@@ -73,6 +78,25 @@ function normalizeState(data) {
     : [];
 
   return { members, marriages };
+}
+
+function normalizeMember(member) {
+  const normalized = {
+    birthStatus: "",
+    motherGroup: "",
+    deathRank: "凡人",
+    deathCause: "",
+    talismanSeed: "",
+    luqi: "",
+    luqiText: "",
+    xianji: "",
+    shentong: "",
+    jinxing: "",
+    externalChildren: "",
+    ...member
+  };
+  if (!CULTIVATION_LEVELS.includes(normalized.deathRank)) normalized.deathRank = "凡人";
+  return normalized;
 }
 
 function saveState() {
@@ -107,10 +131,11 @@ function genderText(gender) {
 }
 
 function statusText(member) {
+  const level = member.deathRank || "凡人";
   if (member.lifeStatus === "dead") {
-    return member.deathRank ? `已故 · ${member.deathRank}` : "已故";
+    return `已故 · ${level}`;
   }
-  return "在世";
+  return `生 · ${level}`;
 }
 
 function lineageLabel(member) {
@@ -244,10 +269,35 @@ function treeRoots(members) {
 }
 
 function filteredMembers() {
-  const q = els.search.value.trim().toLowerCase();
+  const rawQuery = els.search.value.trim();
+  const q = rawQuery.toLowerCase();
+  const compactQuery = rawQuery.replace(/\s+/g, "");
+  const wantsAliveTalisman =
+    compactQuery.includes("在世符种") ||
+    compactQuery.includes("符种在世") ||
+    compactQuery.includes("在世符咒") ||
+    compactQuery.includes("符咒在世");
 
   return state.members.filter((member) => {
-    const haystack = [member.name, member.courtesy, member.styleName, member.notes, member.deathCause, lineageLabel(member)]
+    if (wantsAliveTalisman) return isAliveTalismanMember(member);
+    const haystack = [
+      member.name,
+      member.courtesy,
+      member.styleName,
+      member.notes,
+      member.deathCause,
+      member.deathRank,
+      member.luqi,
+      member.luqiText,
+      member.xianji,
+      member.shentong,
+      member.jinxing,
+      member.externalChildren,
+      member.motherGroup,
+      member.talismanSeed === "yes" ? "符种 已受符种" : "",
+      isAliveTalismanMember(member) ? "在世符种 符种在世 在世符咒 符咒在世" : "",
+      lineageLabel(member)
+    ]
       .join(" ")
       .toLowerCase();
     return !q || haystack.includes(q);
@@ -258,8 +308,19 @@ function render() {
   saveState();
   applyMode();
   applyFont();
+  updateTalismanStats();
   renderSelectors();
   renderTree();
+}
+
+function isAliveTalismanMember(member) {
+  return member.talismanSeed === "yes" && member.lifeStatus !== "dead";
+}
+
+function updateTalismanStats() {
+  const aliveCount = state.members.filter(isAliveTalismanMember).length;
+  els.talismanTotalInput.value = talismanTotal;
+  els.talismanAliveCount.textContent = `已受在世符种 ${aliveCount}`;
 }
 
 function applyMode() {
@@ -383,17 +444,22 @@ function renderMotherGroups(parent, children, visibleIds) {
 function motherGroupsFor(parent, children) {
   const groups = new Map();
   children.forEach((child) => {
-    const key = child.motherId || "unknown";
+    const key = child.motherId || `unknown:${child.motherGroup || ""}`;
     if (!groups.has(key)) {
       groups.set(key, {
         id: `${parent.id}:mother:${key}`,
-        label: child.motherId ? memberName(child.motherId) : "母未记",
+        label: motherGroupLabel(child),
         children: []
       });
     }
     groups.get(key).children.push(child);
   });
   return [...groups.values()];
+}
+
+function motherGroupLabel(child) {
+  if (child.motherId) return memberName(child.motherId);
+  return child.motherGroup ? `母未记 · ${child.motherGroup}` : "母未记";
 }
 
 function renderRootNode(member, visibleIds) {
@@ -406,15 +472,15 @@ function renderCard(member, options = {}) {
     genderText(member.gender),
     lineageLabel(member),
     legitimacyFor(member),
-    statusText(member)
-  ];
+    statusText(member),
+    member.lifeStatus === "dead" && member.deathCause ? `死因：${member.deathCause}` : ""
+  ].filter(Boolean);
   const aliases = [member.courtesy && `字 ${member.courtesy}`, member.styleName && `号 ${member.styleName}`]
     .filter(Boolean)
     .join("，");
   const spouses = spouseLines(member.id);
+  const detailRows = memberDetailRows(member);
   const relationRows = [
-    aliases,
-    member.lifeStatus === "dead" && member.deathCause ? `死因：${member.deathCause}` : "",
     member.notes
   ].filter(Boolean);
 
@@ -434,6 +500,7 @@ function renderCard(member, options = {}) {
           .join("")}
       </div>
       ${spouses.length ? `<div class="spouse-row">${spouses.map((row) => `<div class="spouse-pill">${escapeHtml(row)}</div>`).join("")}</div>` : ""}
+      ${detailRows.length ? `<div class="detail-grid">${detailRows.join("")}</div>` : ""}
       <div class="relations">${relationRows.map((row) => `<div>${escapeHtml(row)}</div>`).join("")}</div>
       ${isCollapsed ? `<div class="branch-note">此脉已收起，共 ${descendants} 位后裔</div>` : ""}
       <div class="card-actions">
@@ -450,6 +517,45 @@ function renderCard(member, options = {}) {
   `;
 }
 
+function memberDetailRows(member) {
+  const rows = [];
+  const item = (label, value, extraClass = "") => {
+    if (!value) return;
+    return `<span class="detail-item ${extraClass}"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></span>`;
+  };
+  const pushRow = (items, extraClass = "") => {
+    const content = items.filter(Boolean).join("");
+    if (content) rows.push(`<div class="detail-row ${extraClass}">${content}</div>`);
+  };
+
+  pushRow([item("号", member.styleName)], "single");
+  pushRow([item("符种", talismanText(member.talismanSeed)), item("箓气", luqiText(member), luqiClass(member.luqi))], "split");
+  pushRow([item("仙基", member.xianji), item("神通", member.shentong)], "split");
+  pushRow([item("金性", member.jinxing)], "single");
+  if (member.gender === "female") pushRow([item("外嫁子嗣", member.externalChildren)], "single");
+  pushRow([item("字", member.courtesy)], "single muted-row");
+  return rows;
+}
+
+function talismanText(value) {
+  if (value === "yes") return "是";
+  return "";
+}
+
+function luqiText(member) {
+  if (!member.luqi && !member.luqiText) return "";
+  if (!member.luqiText) return "有箓气";
+  return member.luqiText;
+}
+
+function luqiClass(value) {
+  if (value === "练气") return "luqi lianqi";
+  if (value === "筑基") return "luqi zhuji";
+  if (value === "紫府") return "luqi zifu";
+  if (value === "金丹") return "luqi jindan";
+  return "";
+}
+
 function tagClass(tag) {
   const classes = ["tag"];
   if (tag === "男") classes.push("gender-male");
@@ -459,8 +565,9 @@ function tagClass(tag) {
   if (tag === "嫡出") classes.push("legitimate");
   if (tag === "庶出") classes.push("shu");
   if (tag.includes("未明")) classes.push("unknown");
-  if (tag === "在世") classes.push("alive");
+  if (tag.startsWith("生")) classes.push("alive");
   if (tag.includes("已故")) classes.push("dead");
+  if (tag.startsWith("死因")) classes.push("death-cause");
   if (tag === "入赘支") classes.push("legitimate");
   return classes.join(" ");
 }
@@ -480,6 +587,14 @@ function resetForm() {
   $("#memberDialogTitle").textContent = "新增族人";
   $("#generationInput").value = 1;
   $("#birthStatusInput").value = "";
+  $("#motherGroupInput").value = "";
+  $("#deathRankInput").value = "凡人";
+  $("#talismanSeedInput").value = "";
+  $("#luqiInput").value = "";
+  $("#luqiTextInput").value = "";
+  $("#xianjiInput").value = "";
+  $("#shentongInput").value = "";
+  $("#jinxingInput").value = "";
   $("#deathCauseInput").value = "";
 }
 
@@ -490,18 +605,28 @@ function openMemberDialog(title = "新增族人") {
 }
 
 function memberFromForm() {
+  const id = $("#editingId").value || uid("m");
+  const existing = state.members.find((item) => item.id === id);
   return {
-    id: $("#editingId").value || uid("m"),
+    id,
     name: $("#nameInput").value.trim(),
     gender: $("#genderInput").value,
     generation: Number($("#generationInput").value) || 1,
-    courtesy: $("#courtesyInput").value.trim(),
+    courtesy: existing?.courtesy || "",
     styleName: $("#styleInput").value.trim(),
     fatherId: $("#fatherInput").value,
     motherId: $("#motherInput").value,
+    motherGroup: $("#motherGroupInput").value.trim(),
     birthStatus: $("#birthStatusInput").value,
     lifeStatus: $("#lifeStatusInput").value,
-    deathRank: $("#deathRankInput").value.trim(),
+    deathRank: $("#deathRankInput").value,
+    talismanSeed: $("#talismanSeedInput").value,
+    luqi: $("#luqiInput").value,
+    luqiText: $("#luqiTextInput").value.trim(),
+    xianji: $("#xianjiInput").value.trim(),
+    shentong: $("#shentongInput").value.trim(),
+    jinxing: $("#jinxingInput").value.trim(),
+    externalChildren: existing?.externalChildren || "",
     deathCause: $("#deathCauseInput").value.trim(),
     notes: $("#notesInput").value.trim()
   };
@@ -514,21 +639,32 @@ function editMember(id) {
   $("#nameInput").value = member.name;
   $("#genderInput").value = member.gender;
   $("#generationInput").value = member.generation || 1;
-  $("#courtesyInput").value = member.courtesy || "";
   $("#styleInput").value = member.styleName || "";
   $("#fatherInput").value = member.fatherId || "";
   $("#motherInput").value = member.motherId || "";
+  $("#motherGroupInput").value = member.motherGroup || "";
   $("#birthStatusInput").value = member.birthStatus || "";
   $("#lifeStatusInput").value = member.lifeStatus || "alive";
-  $("#deathRankInput").value = member.deathRank || "";
+  $("#deathRankInput").value = CULTIVATION_LEVELS.includes(member.deathRank) ? member.deathRank : "凡人";
+  $("#talismanSeedInput").value = member.talismanSeed || "";
+  $("#luqiInput").value = member.luqi || "";
+  $("#luqiTextInput").value = member.luqiText || "";
+  $("#xianjiInput").value = member.xianji || "";
+  $("#shentongInput").value = member.shentong || "";
+  $("#jinxingInput").value = member.jinxing || "";
   $("#deathCauseInput").value = member.deathCause || "";
   $("#notesInput").value = member.notes || "";
   openMemberDialog(`编辑：${member.name}`);
 }
 
-function deleteMember(id) {
+function openDeleteDialog(id) {
   const name = memberName(id);
-  if (!confirm(`确定删除「${name}」？相关婚配会一并移除，子女的父母记录会清空。`)) return;
+  $("#deleteMemberId").value = id;
+  $("#deleteMessage").textContent = `确定删除「${name}」？`;
+  $("#deleteDialog").showModal();
+}
+
+function deleteMember(id) {
   state.members = state.members
     .filter((member) => member.id !== id)
     .map((member) => ({
@@ -545,11 +681,24 @@ function deleteMember(id) {
 function prepareChild(parentId) {
   const parent = state.members.find((member) => member.id === parentId);
   if (!parent) return;
+  if (parent.gender === "female") {
+    openExternalChildrenDialog(parent.id);
+    return;
+  }
   resetForm();
   $("#generationInput").value = (Number(parent.generation) || 1) + 1;
-  if (parent.gender === "male") $("#fatherInput").value = parent.id;
-  if (parent.gender === "female") $("#motherInput").value = parent.id;
+  $("#fatherInput").value = parent.id;
   openMemberDialog(`为 ${parent.name} 添子女`);
+}
+
+function openExternalChildrenDialog(memberId) {
+  const member = state.members.find((item) => item.id === memberId && item.gender === "female");
+  if (!member) return;
+  $("#externalChildrenMemberId").value = member.id;
+  $("#externalChildrenTitle").textContent = `为 ${member.name} 记录外嫁子嗣`;
+  $("#externalChildrenInput").value = member.externalChildren || "";
+  $("#externalChildrenDialog").showModal();
+  $("#externalChildrenInput").focus();
 }
 
 function prepareSpouse(memberId) {
@@ -577,9 +726,17 @@ function createSpouseMember(name, gender, spouseId) {
     styleName: "",
     fatherId: "",
     motherId: "",
+    motherGroup: "",
     birthStatus: "",
     lifeStatus: "alive",
-    deathRank: "",
+    deathRank: "凡人",
+    talismanSeed: "",
+    luqi: "",
+    luqiText: "",
+    xianji: "",
+    shentong: "",
+    jinxing: "",
+    externalChildren: "",
     deathCause: "",
     notes: ""
   };
@@ -600,6 +757,16 @@ els.memberForm.addEventListener("submit", (event) => {
   }
   resetForm();
   els.memberDialog.close();
+  render();
+});
+
+$("#externalChildrenForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const memberId = $("#externalChildrenMemberId").value;
+  const member = state.members.find((item) => item.id === memberId && item.gender === "female");
+  if (!member) return;
+  member.externalChildren = $("#externalChildrenInput").value.trim();
+  $("#externalChildrenDialog").close();
   render();
 });
 
@@ -656,7 +823,7 @@ els.treeView.addEventListener("click", (event) => {
   }
   if (mode !== "edit" && action !== "toggle") return;
   if (action === "edit") editMember(id);
-  if (action === "delete") deleteMember(id);
+  if (action === "delete") openDeleteDialog(id);
   if (action === "child") prepareChild(id);
   if (action === "spouse") prepareSpouse(id);
 });
@@ -685,6 +852,11 @@ document.addEventListener("click", (event) => {
   els.moonMenuBtn.setAttribute("aria-expanded", "false");
 });
 els.fontInput.addEventListener("change", () => setFont(els.fontInput.value));
+els.talismanTotalInput.addEventListener("input", () => {
+  talismanTotal = Math.max(0, Number(els.talismanTotalInput.value) || 0);
+  localStorage.setItem(TALISMAN_TOTAL_KEY, String(talismanTotal));
+  updateTalismanStats();
+});
 $("#viewModeBtn").addEventListener("click", () => setMode("view"));
 $("#editModeBtn").addEventListener("click", () => setMode("edit"));
 $("#addRootBtn").addEventListener("click", () => {
@@ -700,6 +872,16 @@ $("#cancelEditBtn").addEventListener("click", () => {
   resetForm();
   els.memberDialog.close();
 });
+$("#closeExternalChildrenBtn").addEventListener("click", () => $("#externalChildrenDialog").close());
+$("#cancelExternalChildrenBtn").addEventListener("click", () => $("#externalChildrenDialog").close());
+$("#deleteForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = $("#deleteMemberId").value;
+  $("#deleteDialog").close();
+  deleteMember(id);
+});
+$("#closeDeleteBtn").addEventListener("click", () => $("#deleteDialog").close());
+$("#cancelDeleteBtn").addEventListener("click", () => $("#deleteDialog").close());
 $("#resetBtn").addEventListener("click", () => {
   if (!confirm("确定清空全部族谱数据？")) return;
   state = { members: [], marriages: [] };
@@ -757,7 +939,7 @@ function exportTreeSvg() {
       <style>
         ${css}
         .tree-view { overflow: visible !important; border: 0 !important; margin: 0 !important; box-shadow: none !important; }
-        .card-actions, .search-wrap { display: none !important; }
+        .card-actions, .tree-tools { display: none !important; }
       </style>
       ${tree.outerHTML}
     </div>

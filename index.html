@@ -21,11 +21,11 @@
             </button>
             <div id="moonMenuPanel" class="moon-panel" hidden>
               <button id="exportBtn" type="button">导出 JSON</button>
-              <button id="exportTreeBtn" type="button">导出谱图 SVG</button>
               <label class="file-button">
                 导入 JSON
                 <input id="importInput" type="file" accept="application/json" />
               </label>
+              <button id="exportTreeBtn" type="button">导出族谱 SVG</button>
               <label class="menu-field">
                 字体
                 <select id="fontInput">
@@ -58,9 +58,16 @@
             </div>
           </div>
           <div class="tree-panel">
-            <div class="search-wrap" aria-label="搜索族人">
-              <span>查</span>
-              <input id="searchInput" type="search" placeholder="姓名、字、号" />
+            <div class="tree-tools">
+              <label class="talisman-counter">
+                <span>符种总数</span>
+                <input id="talismanTotalInput" type="number" min="0" value="0" />
+                <b id="talismanAliveCount">在世 0</b>
+              </label>
+              <div class="search-wrap" aria-label="搜索族人">
+                <span>查</span>
+                <input id="searchInput" type="search" placeholder="姓名、在世符种" />
+              </div>
             </div>
             <div id="treeView" class="tree-view" aria-live="polite"></div>
           </div>
@@ -76,7 +83,7 @@
           <input type="hidden" id="editingId" />
           <label>
             姓名
-            <input id="nameInput" required placeholder="如：沈怀瑾" />
+            <input id="nameInput" required placeholder="如：李通崖" />
           </label>
           <div class="two-col">
             <label>
@@ -93,16 +100,6 @@
           </div>
           <div class="two-col">
             <label>
-              字
-              <input id="courtesyInput" placeholder="可选" />
-            </label>
-            <label>
-              号
-              <input id="styleInput" placeholder="可选" />
-            </label>
-          </div>
-          <div class="two-col">
-            <label>
               父亲
               <select id="fatherInput">
                 <option value="">未记载</option>
@@ -115,6 +112,10 @@
               </select>
             </label>
           </div>
+          <label>
+            母系分组
+            <input id="motherGroupInput" placeholder="母亲未知时填写，如：一、二、某妾失名" />
+          </label>
           <label>
             出身
             <select id="birthStatusInput">
@@ -134,13 +135,62 @@
               </select>
             </label>
             <label>
-              死时级别
-              <input id="deathRankInput" placeholder="如：从五品、庶民、诰命" />
+              级别
+              <select id="deathRankInput">
+                <option value="凡人">凡人</option>
+                <option value="胎息">胎息</option>
+                <option value="练气">练气</option>
+                <option value="筑基">筑基</option>
+                <option value="紫府">紫府</option>
+                <option value="金丹">金丹</option>
+                <option value="道胎">道胎</option>
+                <option value="仙人">仙人</option>
+              </select>
             </label>
           </div>
           <label>
             死因
             <input id="deathCauseInput" placeholder="如：病逝、战殁、卒于任上" />
+          </label>
+          <label>
+            号
+            <input id="styleInput" placeholder="可选" />
+          </label>
+          <label>
+            符种
+            <select id="talismanSeedInput">
+              <option value="">未记</option>
+              <option value="yes">是</option>
+              <option value="no">否</option>
+            </select>
+          </label>
+          <div class="two-col">
+            <label>
+              箓气等级
+              <select id="luqiInput">
+                <option value="">未记</option>
+                <option value="练气">练气</option>
+                <option value="筑基">筑基</option>
+                <option value="紫府">紫府</option>
+                <option value="金丹">金丹</option>
+              </select>
+            </label>
+            <label>
+              箓气内容
+              <input id="luqiTextInput" placeholder="如：青尺、月阙、玄火" />
+            </label>
+          </div>
+          <label>
+            神通
+            <input id="shentongInput" placeholder="可选" />
+          </label>
+          <label>
+            金性
+            <input id="jinxingInput" placeholder="可选" />
+          </label>
+          <label>
+            仙基
+            <input id="xianjiInput" placeholder="可选" />
           </label>
           <label>
             备注
@@ -149,6 +199,40 @@
           <div class="form-actions">
             <button type="submit">保存族人</button>
             <button id="cancelEditBtn" class="ghost" type="button">取消</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog id="externalChildrenDialog">
+        <form id="externalChildrenForm" method="dialog" class="dialog-card">
+          <div class="panel-head">
+            <h2 id="externalChildrenTitle">外嫁子嗣</h2>
+            <button id="closeExternalChildrenBtn" class="icon-button" type="button" aria-label="关闭">×</button>
+          </div>
+          <input type="hidden" id="externalChildrenMemberId" />
+          <label>
+            外嫁子嗣
+            <textarea id="externalChildrenInput" rows="3" placeholder="只记录姓名，不进入家族树，如：周怀远、周怀瑾"></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="submit">保存</button>
+            <button id="cancelExternalChildrenBtn" class="ghost" type="button">取消</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog id="deleteDialog">
+        <form id="deleteForm" method="dialog" class="dialog-card delete-dialog-card">
+          <div class="panel-head">
+            <h2>删除族人</h2>
+            <button id="closeDeleteBtn" class="icon-button" type="button" aria-label="关闭">×</button>
+          </div>
+          <input type="hidden" id="deleteMemberId" />
+          <p id="deleteMessage" class="dialog-message"></p>
+          <div class="warning-box">相关婚配会一并移除，子女的父母记录会清空。</div>
+          <div class="form-actions">
+            <button class="danger-fill-button" type="submit">确认删除</button>
+            <button id="cancelDeleteBtn" class="ghost" type="button">取消</button>
           </div>
         </form>
       </dialog>

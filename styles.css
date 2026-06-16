@@ -102,7 +102,10 @@ button:hover,
 .app-shell {
   width: min(1280px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 14px 0 42px;
+  min-height: 100vh;
+  padding: 14px 0 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .hero {
@@ -453,6 +456,8 @@ textarea {
 }
 
 .layout {
+  flex: 1;
+  min-height: 0;
   align-items: flex-start;
   padding-top: 16px;
 }
@@ -492,7 +497,10 @@ label {
 .content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .section-actions {
@@ -511,6 +519,10 @@ label {
 .tree-panel {
   position: relative;
   margin-top: 12px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line);
   border-radius: 10px;
   background:
@@ -521,9 +533,9 @@ label {
 }
 
 .tree-view {
+  flex: 1;
   overflow: auto;
   padding: 104px max(16px, calc((100% - 268px) / 2)) 30px;
-  height: clamp(360px, 68vh, 720px);
   min-height: 360px;
   cursor: grab;
   touch-action: none;
@@ -541,6 +553,8 @@ label {
   min-width: max-content;
   justify-content: center;
   zoom: var(--tree-zoom, 1);
+  transform: translate(var(--tree-pan-x, 0px), var(--tree-pan-y, 0px));
+  will-change: transform;
 }
 
 .lineage-node {

@@ -31,6 +31,7 @@ let mode = localStorage.getItem(MODE_KEY) || "view";
 let fontMode = localStorage.getItem(FONT_KEY) || "kai";
 let talismanTotal = Number(localStorage.getItem(TALISMAN_TOTAL_KEY)) || 0;
 let treeZoom = clampTreeZoom(Number(localStorage.getItem(TREE_ZOOM_KEY)) || 1);
+let treePan = { x: 0, y: 0 };
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -343,6 +344,7 @@ function render() {
   applyMode();
   applyFont();
   applyTreeZoom();
+  applyTreePan();
   updateTalismanStats();
   renderSelectors();
   renderTree();
@@ -394,6 +396,11 @@ function applyTreeZoom() {
   els.zoomLabel.textContent = `${Math.round(treeZoom * 100)}%`;
   els.zoomOutBtn.disabled = treeZoom <= TREE_ZOOM_MIN;
   els.zoomInBtn.disabled = treeZoom >= TREE_ZOOM_MAX;
+}
+
+function applyTreePan() {
+  els.treeView.style.setProperty("--tree-pan-x", `${treePan.x}px`);
+  els.treeView.style.setProperty("--tree-pan-y", `${treePan.y}px`);
 }
 
 function setTreeZoom(nextZoom, anchorX = els.treeView.clientWidth / 2, anchorY = els.treeView.clientHeight / 2) {
@@ -458,6 +465,7 @@ function fillSelect(select, items, placeholder, includeBlank = true, selectedVal
 
 function renderTree() {
   applyTreeZoom();
+  applyTreePan();
   const members = filteredMembers().sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, "zh-Hans-CN"));
 
   if (!members.length) {
@@ -1151,40 +1159,39 @@ function isTreeDragBlocked(target) {
   return Boolean(target.closest("button, input, select, textarea, label, dialog"));
 }
 
-els.treeView.addEventListener("pointerdown", (event) => {
+els.treeView.addEventListener("mousedown", (event) => {
   if (event.button !== 0 || isTreeDragBlocked(event.target)) return;
+  event.preventDefault();
   treeDragState = {
-    pointerId: event.pointerId,
     startX: event.clientX,
     startY: event.clientY,
-    scrollLeft: els.treeView.scrollLeft,
-    scrollTop: els.treeView.scrollTop,
+    panX: treePan.x,
+    panY: treePan.y,
     moved: false
   };
   els.treeView.classList.add("dragging");
-  els.treeView.setPointerCapture(event.pointerId);
 });
 
-els.treeView.addEventListener("pointermove", (event) => {
-  if (!treeDragState || event.pointerId !== treeDragState.pointerId) return;
+document.addEventListener("mousemove", (event) => {
+  if (!treeDragState) return;
+  event.preventDefault();
   const dx = event.clientX - treeDragState.startX;
   const dy = event.clientY - treeDragState.startY;
   if (Math.abs(dx) > 3 || Math.abs(dy) > 3) treeDragState.moved = true;
-  els.treeView.scrollLeft = treeDragState.scrollLeft - dx;
-  els.treeView.scrollTop = treeDragState.scrollTop - dy;
+  treePan = {
+    x: treeDragState.panX + dx,
+    y: treeDragState.panY + dy
+  };
+  applyTreePan();
 });
 
-function stopTreeDrag(event) {
-  if (!treeDragState || event.pointerId !== treeDragState.pointerId) return;
+function stopTreeDrag() {
+  if (!treeDragState) return;
   els.treeView.classList.remove("dragging");
-  if (els.treeView.hasPointerCapture(event.pointerId)) {
-    els.treeView.releasePointerCapture(event.pointerId);
-  }
   treeDragState = null;
 }
 
-els.treeView.addEventListener("pointerup", stopTreeDrag);
-els.treeView.addEventListener("pointercancel", stopTreeDrag);
+document.addEventListener("mouseup", stopTreeDrag);
 els.moonMenuBtn.addEventListener("click", (event) => {
   event.stopPropagation();
   const willOpen = els.moonMenuPanel.hidden;

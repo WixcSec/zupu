@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>族谱</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=drag1" />
   </head>
   <body>
     <main class="app-shell">
@@ -68,6 +68,12 @@
                 <span>查</span>
                 <input id="searchInput" type="search" placeholder="姓名、在世符种" />
               </div>
+              <div class="zoom-controls" aria-label="缩放控制">
+                <button id="zoomOutBtn" type="button" aria-label="缩小">-</button>
+                <b id="zoomLabel">100%</b>
+                <button id="zoomInBtn" type="button" aria-label="放大">+</button>
+                <button id="zoomResetBtn" type="button" aria-label="重置缩放">1:1</button>
+              </div>
             </div>
             <div id="treeView" class="tree-view" aria-live="polite"></div>
           </div>
@@ -83,7 +89,7 @@
           <input type="hidden" id="editingId" />
           <label>
             姓名
-            <input id="nameInput" required placeholder="如：李通崖" />
+            <input id="nameInput" required placeholder="如：李通玄" />
           </label>
           <label>
             性别
@@ -106,19 +112,19 @@
             <label>
               父亲
               <select id="fatherInput">
-                <option value="">未记载</option>
+                <option value="">未记录</option>
               </select>
             </label>
             <label>
               母亲
               <select id="motherInput">
-                <option value="">未记载</option>
+                <option value="">未记录</option>
               </select>
             </label>
           </div>
           <label>
             母系分组
-            <input id="motherGroupInput" placeholder="母亲未知时填写，如：一、二、某妾失名" />
+            <input id="motherGroupInput" placeholder="母亲未知时填写，如：一、二、某妾夫名" />
           </label>
           <label>
             出身
@@ -132,7 +138,7 @@
           </label>
           <div class="two-col">
             <label>
-              承嗣于
+              承嗣人
               <select id="adoptiveParentInput">
                 <option value="">无</option>
               </select>
@@ -178,7 +184,7 @@
             <input id="deathCauseInput" placeholder="如：病逝、战殁、卒于任上" />
           </label>
           <label>
-            号
+            字
             <input id="styleInput" placeholder="可选" />
           </label>
           <label>
@@ -202,7 +208,7 @@
             </label>
             <label>
               箓气内容
-              <input id="luqiTextInput" placeholder="如：青尺、月阙、玄火" />
+              <input id="luqiTextInput" placeholder="如：青尺、月阙、玄炉" />
             </label>
           </div>
           <label>
@@ -318,6 +324,6 @@
       </dialog>
     </main>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=drag1"></script>
   </body>
 </html>

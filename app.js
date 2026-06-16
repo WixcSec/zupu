@@ -3,6 +3,10 @@ const COLLAPSE_KEY = "qingya-genealogy-collapsed-v1";
 const MODE_KEY = "qingya-genealogy-mode-v1";
 const FONT_KEY = "qingya-genealogy-font-v1";
 const TALISMAN_TOTAL_KEY = "qingya-genealogy-talisman-total-v1";
+const TREE_ZOOM_KEY = "qingya-genealogy-tree-zoom-v1";
+const TREE_ZOOM_MIN = 0.45;
+const TREE_ZOOM_MAX = 1.8;
+const TREE_ZOOM_STEP = 0.1;
 const GENERATION_WORDS = [
   ["玄", "景"],
   ["渊", "清"],
@@ -26,6 +30,7 @@ let collapsed = loadCollapsed();
 let mode = localStorage.getItem(MODE_KEY) || "view";
 let fontMode = localStorage.getItem(FONT_KEY) || "kai";
 let talismanTotal = Number(localStorage.getItem(TALISMAN_TOTAL_KEY)) || 0;
+let treeZoom = clampTreeZoom(Number(localStorage.getItem(TREE_ZOOM_KEY)) || 1);
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -41,6 +46,10 @@ const els = {
   talismanAliveCount: $("#talismanAliveCount"),
   importInput: $("#importInput"),
   fontInput: $("#fontInput"),
+  zoomInBtn: $("#zoomInBtn"),
+  zoomOutBtn: $("#zoomOutBtn"),
+  zoomResetBtn: $("#zoomResetBtn"),
+  zoomLabel: $("#zoomLabel"),
   moonMenuBtn: $("#moonMenuBtn"),
   moonMenuPanel: $("#moonMenuPanel")
 };
@@ -333,6 +342,7 @@ function render() {
   saveState();
   applyMode();
   applyFont();
+  applyTreeZoom();
   updateTalismanStats();
   renderSelectors();
   renderTree();
@@ -372,6 +382,34 @@ function setFont(nextFont) {
   fontMode = nextFont;
   localStorage.setItem(FONT_KEY, fontMode);
   applyFont();
+}
+
+function clampTreeZoom(value) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(TREE_ZOOM_MAX, Math.max(TREE_ZOOM_MIN, value));
+}
+
+function applyTreeZoom() {
+  els.treeView.style.setProperty("--tree-zoom", treeZoom);
+  els.zoomLabel.textContent = `${Math.round(treeZoom * 100)}%`;
+  els.zoomOutBtn.disabled = treeZoom <= TREE_ZOOM_MIN;
+  els.zoomInBtn.disabled = treeZoom >= TREE_ZOOM_MAX;
+}
+
+function setTreeZoom(nextZoom, anchorX = els.treeView.clientWidth / 2, anchorY = els.treeView.clientHeight / 2) {
+  const previousZoom = treeZoom;
+  const nextClampedZoom = clampTreeZoom(nextZoom);
+  const previousScrollLeft = els.treeView.scrollLeft;
+  const previousScrollTop = els.treeView.scrollTop;
+  treeZoom = nextClampedZoom;
+  localStorage.setItem(TREE_ZOOM_KEY, String(treeZoom));
+  applyTreeZoom();
+  if (previousZoom === treeZoom) return;
+  const scale = treeZoom / previousZoom;
+  requestAnimationFrame(() => {
+    els.treeView.scrollLeft = (previousScrollLeft + anchorX) * scale - anchorX;
+    els.treeView.scrollTop = (previousScrollTop + anchorY) * scale - anchorY;
+  });
 }
 
 function renderSelectors() {
@@ -419,6 +457,7 @@ function fillSelect(select, items, placeholder, includeBlank = true, selectedVal
 }
 
 function renderTree() {
+  applyTreeZoom();
   const members = filteredMembers().sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, "zh-Hans-CN"));
 
   if (!members.length) {
@@ -505,7 +544,6 @@ function renderMotherGroups(parent, children, visibleIds, outAdopted = []) {
             <div class="mother-node ${group.nodeClass}">
               <span>${escapeHtml(group.label)}</span>
               ${group.role ? `<b class="${group.roleClass}">${escapeHtml(group.role)}</b>` : ""}
-              ${group.status ? `<b class="${group.statusClass}">${escapeHtml(group.status)}</b>` : ""}
             </div>
             ${
               collapsed.has(group.id)
@@ -532,8 +570,6 @@ function motherGroupsFor(parent, children, outAdopted = []) {
         label: !outAdoptedChild && isAdoptiveBranch ? "承嗣" : motherGroupLabel(child),
         role: !outAdoptedChild && isAdoptiveBranch ? "" : motherGroupRole(child),
         roleClass: !outAdoptedChild && isAdoptiveBranch ? "" : motherGroupRoleClass(child),
-        status: !outAdoptedChild && isAdoptiveBranch ? "" : motherGroupStatus(child),
-        statusClass: !outAdoptedChild && isAdoptiveBranch ? "" : motherGroupStatusClass(child),
         nodeClass: !outAdoptedChild && isAdoptiveBranch ? "adoptive-mother-node" : "",
         entries: []
       });
@@ -548,23 +584,6 @@ function motherGroupsFor(parent, children, outAdopted = []) {
 function motherGroupLabel(child) {
   if (child.motherId) return memberName(child.motherId);
   return child.motherGroup ? `母未记 · ${child.motherGroup}` : "母未记";
-}
-
-function motherGroupStatus(child) {
-  if (!child.motherId) return "";
-  const marriage = marriageOfParents(child);
-  if (marriage?.marriageStatus === "divorced") return "和离";
-  const mother = state.members.find((member) => member.id === child.motherId);
-  if (mother?.lifeStatus === "dead" || marriage?.marriageStatus === "deceased") return "已故";
-  return "在世";
-}
-
-function motherGroupStatusClass(child) {
-  const status = motherGroupStatus(child);
-  if (status === "和离") return "mother-status divorced";
-  if (status === "已故") return "mother-status deceased";
-  if (status === "在世") return "mother-status alive";
-  return "mother-status";
 }
 
 function motherGroupRole(child) {
@@ -1109,6 +1128,63 @@ $("#collapseAllBtn").addEventListener("click", () => {
   saveCollapsed();
   renderTree();
 });
+els.zoomOutBtn.addEventListener("click", () => setTreeZoom(treeZoom - TREE_ZOOM_STEP));
+els.zoomInBtn.addEventListener("click", () => setTreeZoom(treeZoom + TREE_ZOOM_STEP));
+els.zoomResetBtn.addEventListener("click", () => setTreeZoom(1));
+els.treeView.addEventListener(
+  "wheel",
+  (event) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    const rect = els.treeView.getBoundingClientRect();
+    const anchorX = event.clientX - rect.left;
+    const anchorY = event.clientY - rect.top;
+    const direction = event.deltaY > 0 ? -1 : 1;
+    setTreeZoom(treeZoom + direction * TREE_ZOOM_STEP, anchorX, anchorY);
+  },
+  { passive: false }
+);
+
+let treeDragState = null;
+
+function isTreeDragBlocked(target) {
+  return Boolean(target.closest("button, input, select, textarea, label, dialog"));
+}
+
+els.treeView.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || isTreeDragBlocked(event.target)) return;
+  treeDragState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    scrollLeft: els.treeView.scrollLeft,
+    scrollTop: els.treeView.scrollTop,
+    moved: false
+  };
+  els.treeView.classList.add("dragging");
+  els.treeView.setPointerCapture(event.pointerId);
+});
+
+els.treeView.addEventListener("pointermove", (event) => {
+  if (!treeDragState || event.pointerId !== treeDragState.pointerId) return;
+  const dx = event.clientX - treeDragState.startX;
+  const dy = event.clientY - treeDragState.startY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) treeDragState.moved = true;
+  els.treeView.scrollLeft = treeDragState.scrollLeft - dx;
+  els.treeView.scrollTop = treeDragState.scrollTop - dy;
+});
+
+function stopTreeDrag(event) {
+  if (!treeDragState || event.pointerId !== treeDragState.pointerId) return;
+  els.treeView.classList.remove("dragging");
+  if (els.treeView.hasPointerCapture(event.pointerId)) {
+    els.treeView.releasePointerCapture(event.pointerId);
+  }
+  treeDragState = null;
+}
+
+els.treeView.addEventListener("pointerup", stopTreeDrag);
+els.treeView.addEventListener("pointercancel", stopTreeDrag);
 els.moonMenuBtn.addEventListener("click", (event) => {
   event.stopPropagation();
   const willOpen = els.moonMenuPanel.hidden;
